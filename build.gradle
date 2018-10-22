@@ -1,0 +1,86 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.dorongold.task-tree' version '1.3.1'
+}
+
+repositories {
+    jcenter()
+}
+
+mainClassName = 'de.eekboom.dualtests.App'
+
+dependencies {
+    testCompile 'junit:junit:4.12'
+    testCompile 'org.testng:testng:6.14.3'
+}
+
+// Set to false in a test listener if any JUnit or TestNG test fails, 
+// so that the build can be failed after both types of tests have run
+def allTestsOk = true
+
+// Common configuration for both JUnit and TestNG tests
+def testConfig = {
+    // Make the task show up in "verification" category
+    // in "gradle tasks" output and in IDEA's gradle tool window
+    group = 'verification'
+
+    // There is a separated task that creates a single report for both types of tests
+    test.reports.html.enabled = false
+    
+    // Let the build continue, so that both types of tests can be run and 
+    // the final consolidated report can be created
+    ignoreFailures = true
+    
+    // test listener that sets allTestsOk to false if any test fails
+    afterTest { TestDescriptor testDescriptor, TestResult testResult ->
+        allTestsOk &= (testResult.resultType != TestResult.ResultType.FAILURE)
+    }
+
+    testLogging {
+        events TestLogEvent.FAILED // Show specific test failures in output
+        exceptionFormat = TestExceptionFormat.FULL // Output full failure details
+    }
+}
+
+task testNg(type: Test) {
+    useTestNG()
+    configure testConfig
+    description = 'Runs the TestNG tests'
+}
+
+test {
+    configure testConfig
+    description = 'Runs the JUnit tests'
+}
+
+def testReportDir = file("$buildDir/reports/tests")
+task testReport(type: TestReport) {
+    destinationDir = testReportDir
+    reportOn test, testNg
+    group = 'verification'
+    description = 'Generates a consolidated test report for both JUnit and TestNG tests'
+}
+
+check {
+    dependsOn testReport
+    finalizedBy("checkTestResults")
+}
+
+// fails the build if any JUnit or TestNG test has been run
+task checkTestResults {
+    outputs.upToDateWhen { test.state.upToDate && testNg.state.upToDate }
+    doLast {
+        if (!allTestsOk) {
+            throw new GradleException("""
+#######################################################################################################################
+There were test failures. See console output or test report at ${new File(testReportDir, 'index.html')}.
+#######################################################################################################################
+"""
+            )
+        }
+    }
+}
