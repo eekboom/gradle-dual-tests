@@ -68,17 +68,22 @@ task testReport(type: TestReport) {
     testResultDirs = files("$buildDir/test-results/test/binary", "$buildDir/test-results/testNg/binary")
     group = 'verification'
     description = 'Generates a consolidated test report for both JUnit and TestNG tests'
-    
-    doLast {
-        if (testFailureCount > 0) {
-            def failureText = (project.testFailureCount == 1 
-                    ? 'was one test failure'
-                    : "were ${project.testFailureCount} test failures"
-            )
-            def msg = "There " + failureText + " - see report at file://${testReportDir}/index.html"
-            println "#" * msg.length()
-            println msg
-            println "#" * msg.length()
-        }
+}
+
+gradle.buildFinished {
+    if (project.testFailureCount > 0) {
+        def failureText = (project.testFailureCount == 1
+                ? 'was one test failure'
+                : "were ${project.testFailureCount} test failures"
+        )
+        def msg1 = "There " + failureText + " in ${project.name}."
+        def msg2 = "See report at file://${testReportDir}/index.html"
+        def len = Math.max(msg1.length(), msg2.length())
+        println ""
+        println "#" * len
+        println msg1
+        println msg2
+        println "#" * len
+        println ""
     }
 }
