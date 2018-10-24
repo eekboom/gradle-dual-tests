@@ -18,10 +18,8 @@ dependencies {
     testCompile 'org.testng:testng:6.14.3'
 }
 
-// Set to false in a test listener if any JUnit or TestNG test fails, 
-// so that the build can be failed after both types of tests have run
-def allTestsOk = true
-
+// count failed tests, to print a message linking to the consolidated report if needed
+project.ext.testFailureCount = 0
 // Common configuration for both JUnit and TestNG tests
 def testConfig = {
     // Make the task show up in "verification" category
@@ -29,58 +27,58 @@ def testConfig = {
     group = 'verification'
 
     // There is a separated task that creates a single report for both types of tests
-    test.reports.html.enabled = false
-    
-    // Let the build continue, so that both types of tests can be run and 
-    // the final consolidated report can be created
-    ignoreFailures = true
-    
-    // test listener that sets allTestsOk to false if any test fails
-    afterTest { TestDescriptor testDescriptor, TestResult testResult ->
-        allTestsOk &= (testResult.resultType != TestResult.ResultType.FAILURE)
-    }
+    reports.html.enabled = false
 
     testLogging {
         events TestLogEvent.FAILED // Show specific test failures in output
         exceptionFormat = TestExceptionFormat.FULL // Output full failure details
     }
+
+    // test listener that counts test failures
+    afterTest { TestDescriptor testDescriptor, TestResult testResult ->
+        if (testResult.resultType == TestResult.ResultType.FAILURE) {
+            ++project.ext.testFailureCount
+        }
+    }
+}
+
+test {
+    configure testConfig
+    description = 'Runs the JUnit tests'
+
+    finalizedBy('testNg')
 }
 
 task testNg(type: Test) {
     useTestNG()
     configure testConfig
     description = 'Runs the TestNG tests'
+
+    finalizedBy('testReport')
 }
 
-test {
-    configure testConfig
-    description = 'Runs the JUnit tests'
-}
-
-def testReportDir = file("$buildDir/reports/tests")
+def testReportDir = file("$buildDir/reports/test-report")
 task testReport(type: TestReport) {
     destinationDir = testReportDir
-    reportOn test, testNg
+    
+    // This does *not* work:
+    //    reportOn test, testNg
+    // I guess that's because the testNg task was only executed as part of the "finalizedBy" mechanism
+    // (and not because of any "dependsOn"). So use "testResultDirs" instead:
+    testResultDirs = files("$buildDir/test-results/test/binary", "$buildDir/test-results/testNg/binary")
     group = 'verification'
     description = 'Generates a consolidated test report for both JUnit and TestNG tests'
-}
-
-check {
-    dependsOn testReport
-    finalizedBy("checkTestResults")
-}
-
-// fails the build if any JUnit or TestNG test has been run
-task checkTestResults {
-    outputs.upToDateWhen { test.state.upToDate && testNg.state.upToDate }
+    
     doLast {
-        if (!allTestsOk) {
-            throw new GradleException("""
-#######################################################################################################################
-There were test failures. See console output or test report at ${new File(testReportDir, 'index.html')}.
-#######################################################################################################################
-"""
+        if (testFailureCount > 0) {
+            def failureText = (project.testFailureCount == 1 
+                    ? 'was one test failure'
+                    : "were ${project.testFailureCount} test failures"
             )
+            def msg = "There " + failureText + " - see report at file://${testReportDir}/index.html"
+            println "#" * msg.length()
+            println msg
+            println "#" * msg.length()
         }
     }
 }

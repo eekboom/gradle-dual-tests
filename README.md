@@ -5,13 +5,10 @@ This is a test project for a gradle build that executes both JUnit and TestNG te
 
 For testing the test execution, there is both a failing JUnit and a failing TestNG test.
 
-The build setup is currently **BROKEN:** 
+It relies on gradle's "finalizedBy" feature as well as the "TestReport" task type
+(both of which are still incubating in gradle 4.10.2).
 
-The first "./gradlew build" (initial or after "./gradlew clean") will correctly fail (because there are two failing tests).
-
-However the next invocation of "./gradlew build" will not execute the failing tests again and will incorrectly report BUILD SUCCESSFUL.
-
-**ANY IDEA?**
+Comments are welcome.
 
 Problem
 -------
@@ -42,6 +39,6 @@ Requirements
 
    People should not be forced to look at two separate test reports.
    
-4) Sane gradle behaviour must be preserved
+4) **DONE:** Sane gradle behaviour must be preserved
    * after a successful "gradle build" all tasks are up-to-date on following "gradle build" invocations unless relevant files were changed
-   * **CURRENTLY BROKEN:** Failing tests are executed again in subsequent "gradle build" invocation
+   * In case of test failures the corresponding test task is executed again in subsequent "gradle build" invocation
